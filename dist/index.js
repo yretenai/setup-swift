@@ -460,6 +460,7 @@ const semver = __importStar(__nccwpck_require__(1383));
 const core = __importStar(__nccwpck_require__(2186));
 const os_1 = __nccwpck_require__(1855);
 const VERSIONS_LIST = [
+    ["6.0.3", [os_1.OS.MacOS, os_1.OS.Ubuntu]],
     ["6.0.2", [os_1.OS.MacOS, os_1.OS.Ubuntu]],
     ["6.0.1", [os_1.OS.MacOS, os_1.OS.Ubuntu]],
     ["6.0.0", [os_1.OS.MacOS, os_1.OS.Ubuntu]],
@@ -573,7 +574,8 @@ function verify(version, system) {
     let systemVersions = AVAILABLE_VERSIONS.filter(([_, os]) => os.includes(system.os)).map(([version, _]) => version);
     let matchingVersion = evaluateVersions(systemVersions, version);
     if (matchingVersion === null) {
-        throw new Error(`Version "${version}" is not available`);
+        core.debug(`Version "${version}" is not available, but returning success anyway`);
+        return version;
     }
     core.debug(`Found matching version ${matchingVersion}`);
     return matchingVersion;

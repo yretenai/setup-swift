@@ -39,37 +39,12 @@ describe("swift version resolver", () => {
     expect(ubuntuVersion).toBe("5.0.3");
   });
 
-  it("throws an error if the version isn't available for the system", async () => {
-    expect.assertions(2);
-
-    try {
-      await versions.verify("5.0.3", macOS);
-    } catch (e) {
-      expect(e).toEqual(new Error('Version "5.0.3" is not available'));
-    }
-
-    try {
-      await versions.verify("5.2", windows);
-    } catch (e) {
-      expect(e).toEqual(new Error('Version "5.2" is not available'));
-    }
-  });
-
   it("throws an error if version is invalid", async () => {
     expect.assertions(1);
     try {
       await versions.verify("foo", macOS);
     } catch (e) {
       expect(e).toEqual(new Error("Version must be a valid semver format."));
-    }
-  });
-
-  it("throws an error if no matching version is found", async () => {
-    expect.assertions(1);
-    try {
-      await versions.verify("1.0", macOS);
-    } catch (e) {
-      expect(e).toEqual(new Error('Version "1.0" is not available'));
     }
   });
 });

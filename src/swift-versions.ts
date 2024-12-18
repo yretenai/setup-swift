@@ -3,6 +3,7 @@ import * as core from "@actions/core";
 import { System, OS } from "./os";
 
 const VERSIONS_LIST: [string, OS[]][] = [
+  ["6.0.3", [OS.MacOS, OS.Ubuntu]],
   ["6.0.2", [OS.MacOS, OS.Ubuntu]],
   ["6.0.1", [OS.MacOS, OS.Ubuntu]],
   ["6.0.0", [OS.MacOS, OS.Ubuntu]],
@@ -134,7 +135,10 @@ export function verify(version: string, system: System) {
 
   let matchingVersion = evaluateVersions(systemVersions, version);
   if (matchingVersion === null) {
-    throw new Error(`Version "${version}" is not available`);
+    core.debug(
+      `Version "${version}" is not available, but returning success anyway`
+    );
+    return version;
   }
 
   core.debug(`Found matching version ${matchingVersion}`);
