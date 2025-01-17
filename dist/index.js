@@ -790,7 +790,6 @@ const toolCache = __importStar(__nccwpck_require__(7784));
 const path = __importStar(__nccwpck_require__(1017));
 const exec_1 = __nccwpck_require__(1514);
 const swift_versions_1 = __nccwpck_require__(8263);
-const gpg_1 = __nccwpck_require__(9060);
 const visual_studio_1 = __nccwpck_require__(5219);
 async function install(version, system) {
     if (os.platform() !== "win32") {
@@ -801,9 +800,7 @@ async function install(version, system) {
     let swiftPath = toolCache.find(`swift-${system.name}`, version);
     if (swiftPath === null || swiftPath.trim().length == 0) {
         core.debug(`No cached installer found`);
-        await (0, gpg_1.setupKeys)();
-        let { exe, signature } = await download(swiftPkg);
-        await (0, gpg_1.verify)(signature, exe);
+        let exe = await download(swiftPkg);
         const exePath = await toolCache.cacheFile(exe, swiftPkg.name, `swift-${system.name}`, version);
         swiftPath = path.join(exePath, swiftPkg.name);
     }
@@ -821,30 +818,28 @@ async function install(version, system) {
         },
     };
     let code = await (0, exec_1.exec)(`"${swiftPath}" -q`, []);
-    const systemDrive = process.env.SystemDrive ?? "C:";
-    const swiftLibPath = path.join(systemDrive, "Library");
-    const swiftInstallPath = path.join(swiftLibPath, "Developer", "Toolchains", "unknown-Asserts-development.xctoolchain", "usr", "bin");
+    const localAppData = process.env.LOCALAPPDATA;
+    const swiftLibPath = path.join(localAppData, "Programs", "Swift");
+    const swiftInstallPath = path.join(swiftLibPath, "Toolchains", `${version}+Asserts`, "usr", "bin");
     if (code != 0 || !fs.existsSync(swiftInstallPath)) {
         throw new Error(`Swift installer failed with exit code: ${code}`);
     }
     core.addPath(swiftInstallPath);
+    const swiftRuntime = path.join(swiftLibPath, "Platforms", `${version}`, "Windows.platform", "Developer", "SDKs", "Windows.sdk");
+    core.exportVariable("SDKROOT", swiftRuntime);
+    process.env.SDKROOT = swiftRuntime;
     const additionalPaths = [
-        path.join(swiftLibPath, "Swift-development", "bin"),
-        path.join(swiftLibPath, "icu-67", "usr", "bin"),
+        path.join(swiftLibPath, "Tools", version),
+        path.join(swiftLibPath, "Runtimes", `${version}`, "usr", "bin"),
     ];
     additionalPaths.forEach((value, index, array) => core.addPath(value));
     core.debug(`Swift installed at "${swiftInstallPath}"`);
     await (0, visual_studio_1.setupVsTools)(swiftPkg);
 }
 exports.install = install;
-async function download({ url, name }) {
-    core.debug("Downloading Swift for windows");
-    let [exe, signature] = await Promise.all([
-        toolCache.downloadTool(url),
-        toolCache.downloadTool(`${url}.sig`),
-    ]);
-    core.debug("Swift download complete");
-    return { exe, signature, name };
+async function download({ url }) {
+    core.debug("Downloading swift for windows");
+    return toolCache.downloadTool(url);
 }
 
 

@@ -6,7 +6,6 @@ import * as path from "path";
 import { ExecOptions, exec } from "@actions/exec";
 import { System } from "./os";
 import { swiftPackage, Package } from "./swift-versions";
-import { setupKeys, verify } from "./gpg";
 import { setupVsTools } from "./visual-studio";
 
 export async function install(version: string, system: System) {
@@ -21,10 +20,7 @@ export async function install(version: string, system: System) {
   if (swiftPath === null || swiftPath.trim().length == 0) {
     core.debug(`No cached installer found`);
 
-    await setupKeys();
-
-    let { exe, signature } = await download(swiftPkg);
-    await verify(signature, exe);
+    let exe = await download(swiftPkg);
 
     const exePath = await toolCache.cacheFile(
       exe,
@@ -50,16 +46,9 @@ export async function install(version: string, system: System) {
     },
   };
   let code = await exec(`"${swiftPath}" -q`, []);
-  const systemDrive = process.env.SystemDrive ?? "C:";
-  const swiftLibPath = path.join(systemDrive, "Library");
-  const swiftInstallPath = path.join(
-    swiftLibPath,
-    "Developer",
-    "Toolchains",
-    "unknown-Asserts-development.xctoolchain",
-    "usr",
-    "bin"
-  );
+  const localAppData = process.env.LOCALAPPDATA!;
+  const swiftLibPath = path.join(localAppData, "Programs", "Swift");
+  const swiftInstallPath = path.join(swiftLibPath, "Toolchains", `${version}+Asserts`, "usr", "bin");
 
   if (code != 0 || !fs.existsSync(swiftInstallPath)) {
     throw new Error(`Swift installer failed with exit code: ${code}`);
@@ -67,9 +56,13 @@ export async function install(version: string, system: System) {
 
   core.addPath(swiftInstallPath);
 
+  const swiftRuntime = path.join(swiftLibPath, "Platforms", `${version}`, "Windows.platform", "Developer", "SDKs", "Windows.sdk");
+  core.exportVariable("SDKROOT", swiftRuntime);
+  process.env.SDKROOT = swiftRuntime;
+
   const additionalPaths = [
-    path.join(swiftLibPath, "Swift-development", "bin"),
-    path.join(swiftLibPath, "icu-67", "usr", "bin"),
+    path.join(swiftLibPath, "Tools", version),
+    path.join(swiftLibPath, "Runtimes", `${version}`, "usr", "bin"),
   ];
   additionalPaths.forEach((value, index, array) => core.addPath(value));
 
@@ -77,14 +70,7 @@ export async function install(version: string, system: System) {
   await setupVsTools(swiftPkg);
 }
 
-async function download({ url, name }: Package) {
-  core.debug("Downloading Swift for windows");
-
-  let [exe, signature] = await Promise.all([
-    toolCache.downloadTool(url),
-    toolCache.downloadTool(`${url}.sig`),
-  ]);
-
-  core.debug("Swift download complete");
-  return { exe, signature, name };
+async function download({ url }: Package) {
+  core.debug("Downloading swift for windows");
+  return toolCache.downloadTool(url);
 }
