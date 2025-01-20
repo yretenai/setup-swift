@@ -67,7 +67,7 @@ export async function install(version: string, system: System) {
   additionalPaths.forEach((value, index, array) => core.addPath(value));
 
   core.debug(`Swift installed at "${swiftInstallPath}"`);
-  await setupVsTools(swiftPkg);
+  // await setupVsTools(swiftPkg);
 }
 
 async function download({ url }: Package) {

@@ -607,152 +607,6 @@ function evaluateVersions(versions, versionSpec) {
 
 /***/ }),
 
-/***/ 5219:
-/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
-
-"use strict";
-
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-    __setModuleDefault(result, mod);
-    return result;
-};
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.getVsWherePath = exports.setupVsTools = exports.vsRequirement = void 0;
-const os = __importStar(__nccwpck_require__(2037));
-const fs = __importStar(__nccwpck_require__(7147));
-const path = __importStar(__nccwpck_require__(1017));
-const semver = __importStar(__nccwpck_require__(1383));
-const io = __importStar(__nccwpck_require__(7436));
-const core = __importStar(__nccwpck_require__(2186));
-const exec_1 = __nccwpck_require__(1514);
-/// Setup different version and component requirement
-/// based on swift versions if required
-function vsRequirement({ version }) {
-    const recVersion = "10.0.17763";
-    const currentVersion = os.release();
-    const useVersion = semver.gte(currentVersion, recVersion)
-        ? currentVersion
-        : recVersion;
-    return {
-        version: "16",
-        components: [
-            "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
-            `Microsoft.VisualStudio.Component.Windows10SDK.${semver.patch(useVersion)}`,
-        ],
-    };
-}
-exports.vsRequirement = vsRequirement;
-/// Do swift version based additional support files setup
-async function setupSupportFiles({ version }, vsInstallPath) {
-    if (semver.lt(version, "5.4.2")) {
-        /// https://docs.microsoft.com/en-us/cpp/build/building-on-the-command-line?view=msvc-170
-        const nativeToolsScriptx86 = path.join(vsInstallPath, "VC\\Auxiliary\\Build\\vcvars32.bat");
-        const copyCommands = [
-            'copy /Y %SDKROOT%\\usr\\share\\ucrt.modulemap "%UniversalCRTSdkDir%\\Include\\%UCRTVersion%\\ucrt\\module.modulemap"',
-            'copy /Y %SDKROOT%\\usr\\share\\visualc.modulemap "%VCToolsInstallDir%\\include\\module.modulemap"',
-            'copy /Y %SDKROOT%\\usr\\share\\visualc.apinotes "%VCToolsInstallDir%\\include\\visualc.apinotes"',
-            'copy /Y %SDKROOT%\\usr\\share\\winsdk.modulemap "%UniversalCRTSdkDir%\\Include\\%UCRTVersion%\\um\\module.modulemap"',
-        ].join("&&");
-        let code = await (0, exec_1.exec)("cmd /k", [nativeToolsScriptx86], {
-            failOnStdErr: true,
-            input: Buffer.from(copyCommands, "utf8"),
-        });
-        core.info(`Ran command for swift and exited with code: ${code}`);
-    }
-}
-/// set up required visual studio tools for swift on windows
-async function setupVsTools(pkg) {
-    /// https://github.com/microsoft/vswhere/wiki/Find-MSBuild
-    /// get visual studio properties
-    const vswhereExe = await getVsWherePath();
-    const req = vsRequirement(pkg);
-    const vsWhereExec = `-products * ` +
-        `-format json -utf8 ` +
-        `-latest -version "${req.version}"`;
-    let payload = "";
-    const options = {};
-    options.listeners = {
-        stdout: (data) => {
-            payload = payload.concat(data.toString("utf-8"));
-        },
-        stderr: (data) => {
-            core.error(data.toString());
-        },
-    };
-    // execute the find putting the result of the command in the options vsInstallPath
-    await (0, exec_1.exec)(`"${vswhereExe}" ${vsWhereExec}`, [], options);
-    let vs = JSON.parse(payload)[0];
-    if (!vs.installationPath) {
-        throw new Error(`Unable to find any visual studio installation for version: ${req.version}.`);
-    }
-    /// https://docs.microsoft.com/en-us/visualstudio/install/use-command-line-parameters-to-install-visual-studio?view=vs-2022
-    /// install required visual studio components
-    const vsInstallerExec = `modify --installPath "${vs.installationPath}"` +
-        req.components.reduce((previous, current) => `${previous} --add "${current}"`, "") +
-        ` --quiet`;
-    // install required visual studio components
-    const code = await (0, exec_1.exec)(`"${vs.properties.setupEngineFilePath}" ${vsInstallerExec}`, []);
-    if (code != 0) {
-        throw new Error(`Visual Studio installer failed to install required components with exit code: ${code}.`);
-    }
-    await setupSupportFiles(pkg, vs.installationPath);
-}
-exports.setupVsTools = setupVsTools;
-/// Get vswhere and vs_installer paths
-/// Borrowed from setup-msbuild action: https://github.com/microsoft/setup-msbuild
-/// From source file: https://github.com/microsoft/setup-msbuild/blob/master/src/main.ts
-async function getVsWherePath() {
-    // check to see if we are using a specific path for vswhere
-    let vswhereToolExe = "";
-    // Env variable for self-hosted runner to provide custom path
-    const VSWHERE_PATH = process.env.VSWHERE_PATH;
-    if (VSWHERE_PATH) {
-        // specified a path for vswhere, use it
-        core.debug(`Using given vswhere-path: ${VSWHERE_PATH}`);
-        vswhereToolExe = path.join(VSWHERE_PATH, "vswhere.exe");
-    }
-    else {
-        // check in PATH to see if it is there
-        try {
-            const vsWhereInPath = await io.which("vswhere", true);
-            core.debug(`Found tool in PATH: ${vsWhereInPath}`);
-            vswhereToolExe = vsWhereInPath;
-        }
-        catch {
-            // fall back to VS-installed path
-            vswhereToolExe = path.join(process.env["ProgramFiles(x86)"], "Microsoft Visual Studio", "Installer", "vswhere.exe");
-            core.debug(`Trying Visual Studio-installed path: ${vswhereToolExe}`);
-        }
-    }
-    if (!fs.existsSync(vswhereToolExe)) {
-        throw new Error("Action requires the path to where vswhere.exe exists");
-    }
-    return vswhereToolExe;
-}
-exports.getVsWherePath = getVsWherePath;
-
-
-/***/ }),
-
 /***/ 6414:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
@@ -790,7 +644,6 @@ const toolCache = __importStar(__nccwpck_require__(7784));
 const path = __importStar(__nccwpck_require__(1017));
 const exec_1 = __nccwpck_require__(1514);
 const swift_versions_1 = __nccwpck_require__(8263);
-const visual_studio_1 = __nccwpck_require__(5219);
 async function install(version, system) {
     if (os.platform() !== "win32") {
         core.error("Trying to run windows installer on non-windows os");
@@ -834,7 +687,7 @@ async function install(version, system) {
     ];
     additionalPaths.forEach((value, index, array) => core.addPath(value));
     core.debug(`Swift installed at "${swiftInstallPath}"`);
-    await (0, visual_studio_1.setupVsTools)(swiftPkg);
+    // await setupVsTools(swiftPkg);
 }
 exports.install = install;
 async function download({ url }) {
